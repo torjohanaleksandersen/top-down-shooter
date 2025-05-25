@@ -51,7 +51,7 @@ export class Player extends THREE.Object3D {
     loadSkin() {
         const loader = new GLTFLoader();
 
-        loader.load("./lib/models/steve.glb", (gltf) => {
+        loader.load("./lib/models/swat.glb", (gltf) => {
             const model = gltf.scene;
 
             model.traverse(child => {
