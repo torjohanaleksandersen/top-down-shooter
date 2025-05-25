@@ -26,6 +26,9 @@ export class Player extends THREE.Object3D {
         this.accelerationMagnitude = 5;
         this.radius = 0.5;
 
+        this.movement = "idle";
+        this.shooting = false;
+
         this.animations = {};
         this.mixer = new THREE.AnimationMixer();
         this.keys = {};
@@ -99,15 +102,19 @@ export class Player extends THREE.Object3D {
     playAnimation(key) {
         if (key === currentAnimation) return;
         Object.entries(this.animations).forEach(([key, value]) => {
-            this.animations[key].fadeOut(0.2);
+            this.animations[key].fadeOut(0.15);
         })
-
+ 
         if (!this.animations[key]) return;
-        this.animations[key].reset().fadeIn(0.2).play();
+        this.animations[key].reset().fadeIn(0.15).play();
         currentAnimation = key;
     }
 
     shoot() {
+        this.shooting = true;
+        setTimeout(() => {
+            this.shooting = false;
+        }, 300);
         bullets.set(this.position.clone(), forwardVec.clone(), 0);
 
         const data = {};
@@ -130,6 +137,9 @@ export class Player extends THREE.Object3D {
         const data = [];
         data.push(this.position.toArray());
         data.push(this.velocity.toArray());
+        data.push([this.movement, this.shooting]);
+        data.push(this.rotation.z);
+
 
         socket.emit("transform-update", data);
     }
@@ -189,13 +199,23 @@ export class Player extends THREE.Object3D {
     }
 
     updateStateAnimation() {
+        let animation = "";
         if (this.keys["w"]) {
-            this.playAnimation("run_rifle");
+            animation = "run_rifle";
+            this.movement = "run";
         } else if (this.keys["a"] || this.keys["s"] || this.keys["d"]) {
-            this.playAnimation("walk_rifle");
+            animation = "walk_rifle";
+            this.movement = "walk";
         } else {
-            this.playAnimation("idle_rifle");
+            animation = "idle_rifle";
+            this.movement = "idle";
         }
+
+        if (this.shooting) {
+            animation += "_ads";
+        }
+
+        this.playAnimation(animation);
     }
 
     checkCollision(dt) {

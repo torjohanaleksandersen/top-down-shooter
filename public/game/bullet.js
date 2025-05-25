@@ -15,7 +15,7 @@ class Bullets extends THREE.Object3D {
 
         mesh.userData.velocity = new THREE.Vector2(...velocity);
         mesh.userData.time = time;
-        mesh.userData.timeLeft = 200;
+        mesh.userData.timeLeft = 1000;
         mesh.userData.playerId = playerId;
         mesh.userData.timesCollided = 0;
 
@@ -68,8 +68,8 @@ class Bullets extends THREE.Object3D {
             bullet.position.x += bullet.userData.velocity.x * dt * this.speed;
             bullet.position.z += bullet.userData.velocity.y * dt * this.speed;
 
-            bullet.timeLeft --;
-            if (bullet.timeLeft <= 0) this.remove(bullet);
+            bullet.userData.timeLeft --;
+            if (bullet.userData.timeLeft <= 0) this.remove(bullet);
 
             const collision = bullet.userData.collision
 

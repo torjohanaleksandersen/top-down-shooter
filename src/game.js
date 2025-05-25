@@ -11,12 +11,16 @@ class Player {
             x: 0,
             z: 0
         }
+        this.rotation = 0;
         this.socket = socket;
         this.id = socket.id;
+
+        this.movement = "idle";
+        this.shooting = false;
     }
 
     updateTransform( data ) {
-        const [position, velocity] = data;
+        const [position, velocity, state, rotation] = data;
 
         this.position.x = position[0];
         this.position.y = position[1];
@@ -24,6 +28,11 @@ class Player {
 
         this.velocity.x = velocity[0];
         this.velocity.z = velocity[1];
+
+        this.movement = state[0];
+        this.shooting = state[1];
+
+        this.rotation = rotation;
     }
 }
 
@@ -57,7 +66,7 @@ export class Game {
 
         this.players.forEach((p, id) => {
             if (id !== playerSocket.id) {
-                playerSocket.emit("add-enemy", { id });
+                playerSocket.emit("add-enemy", { id: p.id });
             }
         });
     }
@@ -84,8 +93,10 @@ export class Game {
         this.players.forEach((player) => {
             data[player.socket.id] = [
                 [player.position.x, player.position.y, player.position.z],
-                [player.velocity.x, player.velocity.z]
-            ];
+                [player.velocity.x, player.velocity.z],
+                [player.movement, player.shooting],
+                [player.rotation]
+            ]; 
         });
 
         this.players.forEach((player) => {

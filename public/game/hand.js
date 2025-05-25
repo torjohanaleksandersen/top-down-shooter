@@ -12,20 +12,17 @@ class Gun extends THREE.Object3D {
         })
 
         this.scale.multiplyScalar(70);
-        this.rotation.set(0, 0, 1 + Math.PI);
-        this.position.y = 30;
-        this.position.x = 13;
+        this.rotation.set(-0.3, 0, 1 + Math.PI);
+        this.position.set(13, 30, -6);
     }
 }
-
-const gun = new Gun();
 
 export class Hand {
     constructor (skeleton) {
 
         skeleton.bones.forEach(bone => {
             if (bone.name === "mixamorigRightHand") {
-                bone.add(gun);
+                bone.add(new Gun());
             }
         })
     }

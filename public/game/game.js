@@ -24,7 +24,7 @@ export class Game {
 
         window.addEventListener("resize", this.onWindowResize);
 
-        camera.position.set(0, 10, 0);
+        camera.position.set(0, 6, 0);
         camera.lookAt(0, 0, 0);
 
         scene.add(player);
@@ -35,7 +35,7 @@ export class Game {
         socket.on("update", data => { this.onServerUpdate(data) });
         socket.on("add-enemy", data => {
             if (data.id === socket.id) return;
-            enemies.add(data.id)
+            enemies.add(data.id);
         })
         socket.on("remove-player", socketId => { enemies.remove(socketId) });
         socket.on("shoot", data => { this.handleShootingFromEnemies(data) });
@@ -64,8 +64,12 @@ export class Game {
     }
 
     onServerUpdate(data) {
+
         for (const id in data) {
             if (id === socket.id) return;
+            if (!enemies.has(id)) {
+                enemies.add(id);
+            }
 
             enemies.onServerUpdate(data[id], id);
         }
