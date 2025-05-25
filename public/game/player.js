@@ -14,6 +14,7 @@ const sideVec = new THREE.Vector2(0, 1);
 const mouse = new THREE.Vector2(0, 0);
 
 const camSpeed = 0.1;
+let mouseDistance = 0;
 let currentAnimation = "";
 
 export class Player extends THREE.Object3D {
@@ -153,6 +154,7 @@ export class Player extends THREE.Object3D {
         );
 
         const dir = new THREE.Vector2(mouse.x - playerScreen.x, mouse.y - playerScreen.y);
+        mouseDistance = dir.length();
         dir.normalize();
 
         forwardVec.copy(dir);
@@ -189,9 +191,16 @@ export class Player extends THREE.Object3D {
     }
 
     updateCamera() {
-        const target = camera.position.clone();
+        const target = new THREE.Vector3(0, 0, 0);
         target.x = this.position.x;
         target.z = this.position.z;
+
+        if (forwardVec.length() > 0) {
+            const forward = new THREE.Vector3(forwardVec.x, 0, forwardVec.y);
+            forward.multiplyScalar(Math.min(mouseDistance / 300, 3))
+
+            target.add(forward);
+        }
 
         const lerped = camera.position.clone().lerp(target, camSpeed);
         camera.position.x = lerped.x;

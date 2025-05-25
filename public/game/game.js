@@ -24,7 +24,7 @@ export class Game {
 
         window.addEventListener("resize", this.onWindowResize);
 
-        camera.position.set(0, 6, 0);
+        camera.position.set(0, 7, 0);
         camera.lookAt(0, 0, 0);
 
         scene.add(player);
