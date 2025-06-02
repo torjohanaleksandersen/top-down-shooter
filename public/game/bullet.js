@@ -1,29 +1,61 @@
 import { world } from "./world.js";
 import * as THREE from "./lib/three/build/three.module.js"
+import { GLTFLoader } from "./lib/three/examples/jsm/loaders/GLTFLoader.js";
+import { player } from "./player.js";
+
+const loader = new GLTFLoader();
+let model = new THREE.Object3D();
+
+function loadModel() {
+    return new Promise((resolve, reject) => {
+        loader.load(
+            "lib/models/5.56.glb",
+            (gltf) => {
+                model = gltf.scene;
+                resolve();
+            },
+            undefined,
+            (error) => reject(error)
+        );
+    });
+}
+
+await loadModel();
+
+class Bullet extends THREE.Object3D {
+    constructor() {
+        super();
+        this.add(model.clone()); 
+
+        this.scale.setScalar(0.05);
+    }
+}
+
 
 class Bullets extends THREE.Object3D {
     constructor () {
         super()
-        this.speed = 10;
-        this.timesAllowedToCollide = 2;
+        this.speed = 20;
     }
 
-    set(origin, velocity, time, playerId = 0) {
-        const geometry = new THREE.BoxGeometry( 0.1, 0.1, 0.1 );
-        const material = new THREE.MeshBasicMaterial( { color: 0xffffff } );
-        const mesh = new THREE.Mesh( geometry, material );
+    set(_origin, velocity, time, playerId = 0) {
+        const mesh = new Bullet();
+
+        const yaw = Math.atan2(velocity.x, velocity.y);
+        mesh.rotation.y = yaw + Math.PI / 2;
 
         mesh.userData.velocity = new THREE.Vector2(...velocity);
         mesh.userData.time = time;
-        mesh.userData.timeLeft = 1000;
+        mesh.userData.timeLeft = 100;
         mesh.userData.playerId = playerId;
-        mesh.userData.timesCollided = 0;
 
         const dt = Date.now() - time;
         mesh.position.x += mesh.userData.velocity.x * dt * this.speed;
         mesh.position.z += mesh.userData.velocity.y * dt * this.speed;
 
-        mesh.position.set(...origin);
+        const origin = player.hand.gun.getEndPointPositionOfGun();
+
+        mesh.position.copy(origin);
         this.add(mesh);
 
         this.computeTrajectory(origin, mesh.userData.velocity, mesh);
@@ -40,25 +72,10 @@ class Bullets extends THREE.Object3D {
         if (intersects.length > 0) {
             const object = intersects[0];
 
-            const I = direction.clone().normalize();
-
-            const localNormal = object.face.normal.clone();
-            const normalMatrix = new THREE.Matrix3().getNormalMatrix(object.object.matrixWorld);
-            const N = localNormal.applyMatrix3(normalMatrix).normalize();
-
-            if (I.dot(N) > 0) {
-                N.negate();
-            }
-
-            const dot = I.dot(N);
-            const R = I.clone().sub(N.multiplyScalar(2 * dot));
-
             const time = object.distance / this.speed;
 
             mesh.userData.collision = {
-                R: mesh.userData.timesCollided < this.timesAllowedToCollide ? R : null,
                 time,
-                point: object.point
             }
         }
     }
@@ -76,15 +93,7 @@ class Bullets extends THREE.Object3D {
             if (collision) {
                 collision.time -= dt;
                 if (collision.time <= 0) {
-                    if (!collision.R) {
-                        this.remove(bullet);
-                        return;
-                    }
-                    bullet.userData.velocity.x = collision.R.x;
-                    bullet.userData.velocity.y = collision.R.z;
-
-                    bullet.userData.timesCollided ++;
-                    this.computeTrajectory(collision.point.toArray(), new THREE.Vector2(collision.R.x, collision.R.z), bullet);
+                    this.remove(bullet);
                 }
             }
         })

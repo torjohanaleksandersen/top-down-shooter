@@ -2,6 +2,7 @@ import socket from "../index.js";
 import { bullets } from "./bullet.js";
 import { enemies } from "./enemies.js";
 import * as THREE from "./lib/three/build/three.module.js"
+import { particles } from "./particles.js";
 import { player } from "./player.js";
 import { world, initWorld } from "./world.js";
 
@@ -19,10 +20,11 @@ export class Game {
     constructor () {
         renderer.setPixelRatio( window.devicePixelRatio );
         renderer.setSize( window.innerWidth, window.innerHeight );
-        renderer.setClearColor(new THREE.Color(0.3, 0.3, 0.3))
+        renderer.setClearColor(new THREE.Color(0x87CEFA))
         document.body.appendChild( renderer.domElement );
 
         window.addEventListener("resize", this.onWindowResize);
+        document.addEventListener('contextmenu', event => event.preventDefault());
 
         camera.position.set(0, 7, 0);
         camera.lookAt(0, 0, 0);
@@ -30,6 +32,7 @@ export class Game {
         scene.add(player);
         scene.add(bullets);
         scene.add(world);
+        scene.add(particles);
 
 
         socket.on("update", data => { this.onServerUpdate(data) });
@@ -90,6 +93,7 @@ export class Game {
         player.update(dt);
         enemies.update(dt);
         bullets.update(dt);
+        particles.update(dt);
 
         renderer.render(scene, camera);
     }

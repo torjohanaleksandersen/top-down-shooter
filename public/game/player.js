@@ -7,9 +7,10 @@ import { enemies } from "./enemies.js";
 import { GLTFLoader } from "./lib/three/examples/jsm/loaders/GLTFLoader.js"
 import { FBXLoader } from "./lib/three/examples/jsm/loaders/FBXLoader.js"
 import { Hand } from "./hand.js";
+import { particles } from "./particles.js";
 
 const reqVelocity = new THREE.Vector2(0, 0);
-const forwardVec = new THREE.Vector2(1, 0);
+export const forwardVec = new THREE.Vector2(1, 0);
 const sideVec = new THREE.Vector2(0, 1);
 const mouse = new THREE.Vector2(0, 0);
 
@@ -28,6 +29,7 @@ export class Player extends THREE.Object3D {
         this.radius = 0.5;
 
         this.movement = "idle";
+        this.aiming = false;
         this.shooting = false;
 
         this.animations = {};
@@ -36,6 +38,7 @@ export class Player extends THREE.Object3D {
         document.addEventListener("keydown", (e) => { this.keys[e.key.toLowerCase()] = true; });
         document.addEventListener("keyup", (e) => { this.keys[e.key.toLowerCase()] = false; });
 
+
         document.addEventListener("mousemove", (e) => {
             mouse.x = e.clientX;
             mouse.y = e.clientY;
@@ -43,6 +46,15 @@ export class Player extends THREE.Object3D {
 
         document.addEventListener("mousedown", (e) => {
             if (e.button === 0) this.shoot();
+
+            if (e.button === 2) this.aim();
+        })
+
+        document.addEventListener("mouseup", (e) => {
+            if (e.button === 2) {
+                this.aiming = false;
+                this.hand.gun.setDefaultTransform();
+            }
         })
 
         setInterval(() => {
@@ -64,6 +76,7 @@ export class Player extends THREE.Object3D {
                     child.material.opacity = 1.0;
                     child.material.depthWrite = true;
                     child.material.needsUpdate = true;
+                    child.frustumCulled = false;
 
                     const mat = child.material.clone();
                     child.material = new THREE.MeshLambertMaterial(mat);
@@ -112,6 +125,7 @@ export class Player extends THREE.Object3D {
     }
 
     shoot() {
+        if (!this.aiming) return;
         this.shooting = true;
         setTimeout(() => {
             this.shooting = false;
@@ -132,6 +146,13 @@ export class Player extends THREE.Object3D {
         data.time = Date.now();
 
         socket.emit("shoot", data)
+
+        particles.muzzleSmoke();
+    }
+
+    aim() {
+        this.aiming = true;
+        this.hand.gun.setTransform([Math.PI / 2, 0, - Math.PI / 2], [3, 25, 5])
     }
 
     sendTransformUpdate() {
@@ -187,7 +208,7 @@ export class Player extends THREE.Object3D {
         const target = this.position.clone().add(new THREE.Vector3(forwardVec.x, 0, forwardVec.y));
         this.lookAt(target);
         this.rotateX(- Math.PI / 2);
-
+        this.rotateY(0.12);
     }
 
     updateCamera() {
@@ -220,7 +241,7 @@ export class Player extends THREE.Object3D {
             this.movement = "idle";
         }
 
-        if (this.shooting) {
+        if (this.shooting || this.aiming) {
             animation += "_ads";
         }
 
@@ -279,6 +300,7 @@ export class Player extends THREE.Object3D {
         }
 
         this.mixer.update(dt);
+        if (this.hand && this.hand.gun) this.hand.gun.update(dt)
     }
 }
 
