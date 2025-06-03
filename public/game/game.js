@@ -80,7 +80,7 @@ export class Game {
 
     handleShootingFromEnemies(data) {
         if (data.playerId === socket.id) return;
-        bullets.set(data.position, data.direction, data.time, data.playerId)
+        enemies.shot(new THREE.Vector2(...data.direction), data.time, data.playerId);
     }
 
     animate() {

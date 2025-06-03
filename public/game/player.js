@@ -1,4 +1,5 @@
 import * as THREE from "./lib/three/build/three.module.js"
+import { Body } from "./body.js";
 import socket, { PACKET_FREQ } from "../index.js"
 import { camera, scene } from "./game.js";
 import { world } from "./world.js";
@@ -16,25 +17,17 @@ const mouse = new THREE.Vector2(0, 0);
 
 const camSpeed = 0.1;
 let mouseDistance = 0;
-let currentAnimation = "";
 
-export class Player extends THREE.Object3D {
+export class Player extends Body {
     constructor () {
         super()
         this.position.set(0, 1, 0);
         this.velocity = new THREE.Vector2(0, 0);
 
-        this.speed = 5;
-        this.accelerationMagnitude = 5;
-        this.radius = 0.5;
-
         this.movement = "idle";
-        this.aiming = false;
-        this.shooting = false;
 
-        this.animations = {};
-        this.mixer = new THREE.AnimationMixer();
         this.keys = {};
+
         document.addEventListener("keydown", (e) => { this.keys[e.key.toLowerCase()] = true; });
         document.addEventListener("keyup", (e) => { this.keys[e.key.toLowerCase()] = false; });
 
@@ -64,81 +57,16 @@ export class Player extends THREE.Object3D {
         this.loadSkin();
     }
 
-    loadSkin() {
-        const loader = new GLTFLoader();
-
-        loader.load("./lib/models/swat.glb", (gltf) => {
-            const model = gltf.scene;
-
-            model.traverse(child => {
-                if (child.isMesh) {
-                    child.material.transparent = false;
-                    child.material.opacity = 1.0;
-                    child.material.depthWrite = true;
-                    child.material.needsUpdate = true;
-                    child.frustumCulled = false;
-
-                    const mat = child.material.clone();
-                    child.material = new THREE.MeshLambertMaterial(mat);
-                }
-            });
-
-            model.position.z = -1;
-
-            this.add(model);
-
-            this.hand = new Hand(new THREE.SkeletonHelper(model));
-
-            this.loadAnimations(model)
-        })
-    }
-
-    loadAnimations(model) {
-        this.mixer = new THREE.AnimationMixer(model);
-
-        const loader = new FBXLoader();
-
-        [
-            "idle_rifle",
-            "walk_rifle",
-            "run_rifle",
-            "idle_rifle_ads",
-            "walk_rifle_ads",
-            "run_rifle_ads"
-        ]
-        .forEach(key => {
-            loader.load(`./lib/animations/${key}.fbx`, animation => {
-                this.animations[key] = this.mixer.clipAction(animation.animations[0]);
-            })
-        })
-    }
-
-    playAnimation(key) {
-        if (key === currentAnimation) return;
-        Object.entries(this.animations).forEach(([key, value]) => {
-            this.animations[key].fadeOut(0.15);
-        })
- 
-        if (!this.animations[key]) return;
-        this.animations[key].reset().fadeIn(0.15).play();
-        currentAnimation = key;
-    }
-
     shoot() {
         if (!this.aiming) return;
         this.shooting = true;
         setTimeout(() => {
             this.shooting = false;
         }, 300);
-        bullets.set(this.position.clone(), forwardVec.clone(), 0);
+        bullets.set(this, forwardVec.clone(), 0);
 
         const data = {};
         data.playerId = socket.id;
-        data.position = [
-            this.position.x,
-            this.position.y,
-            this.position.z
-        ]
         data.direction = [
             forwardVec.x,
             forwardVec.y
@@ -147,19 +75,14 @@ export class Player extends THREE.Object3D {
 
         socket.emit("shoot", data)
 
-        particles.muzzleSmoke();
-    }
-
-    aim() {
-        this.aiming = true;
-        this.hand.gun.setTransform([Math.PI / 2, 0, - Math.PI / 2], [3, 25, 5])
+        particles.muzzleSmoke(player);
     }
 
     sendTransformUpdate() {
         const data = [];
         data.push(this.position.toArray());
         data.push(this.velocity.toArray());
-        data.push([this.movement, this.shooting]);
+        data.push([this.movement, this.aiming]);
         data.push(this.rotation.z);
 
 

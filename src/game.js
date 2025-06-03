@@ -17,6 +17,7 @@ class Player {
 
         this.movement = "idle";
         this.shooting = false;
+        this.aiming = false;
     }
 
     updateTransform( data ) {
@@ -30,7 +31,7 @@ class Player {
         this.velocity.z = velocity[1];
 
         this.movement = state[0];
-        this.shooting = state[1];
+        this.aiming = state[1];
 
         this.rotation = rotation;
     }
@@ -81,7 +82,7 @@ export class Game {
 
     playerShooting(data) {
         this.players.forEach((player, id) => {
-            if (id !== data.id) {
+            if (id !== data.playerId) {
                 player.socket.emit("shoot", data);
             }
         })
@@ -94,7 +95,7 @@ export class Game {
             data[player.socket.id] = [
                 [player.position.x, player.position.y, player.position.z],
                 [player.velocity.x, player.velocity.z],
-                [player.movement, player.shooting],
+                [player.movement, player.aiming],
                 [player.rotation]
             ]; 
         });

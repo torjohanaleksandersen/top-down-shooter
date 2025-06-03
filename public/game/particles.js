@@ -20,7 +20,7 @@ class Particle extends THREE.Points {
             lerp: {
                 
             },
-            velocity: new THREE.Vector3(0, 0, 0)
+            velocity: new THREE.Vector3(0, 0, 0),
         }
         this.name = "particle";
     }
@@ -32,8 +32,8 @@ export class Particles extends THREE.Object3D {
         super();
     }
 
-    muzzleSmoke() {
-        const position = player.hand.gun.getEndPointPositionOfGun();
+    muzzleSmoke(body) {
+        const position = body.hand.gun.getEndPointPositionOfGun();
         const pointlight = new THREE.PointLight(0xffffff, 1, 100, 0);
 
         pointlight.position.copy(position.clone());
@@ -50,10 +50,12 @@ export class Particles extends THREE.Object3D {
             const t = Math.pow(Math.random(), 2) * 0.5;
 
             const dir = new THREE.Vector3();
-            player.hand.gun.getWorldDirection(dir).negate();
+            body.hand.gun.getWorldDirection(dir).negate();
             pos.add(dir.clone().multiplyScalar(t));
             const spread = 0.1;
             pos.add(new THREE.Vector3(dir.z, 0, - dir.x).multiplyScalar(((Math.random() - 0.5) * spread) * (1 - t)));
+
+
 
             const size = 0.05 + (1 - t) * 0.02;
             const color = new THREE.Color(1 - t * 1.7, 1 - t * 1.7, 1 - t * 1.7);
@@ -78,7 +80,7 @@ export class Particles extends THREE.Object3D {
                 factor: 10
             }
 
-            //particle.userData.velocity.set(player.velocity.x, 0, player.velocity.y);
+            //particle.userData.velocity.set(body.velocity.x, 0, body.velocity.y);
 
             this.add(particle);
         }

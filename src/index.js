@@ -13,6 +13,23 @@ import { Game } from "./game.js";
 
 export const PACKET_FREQ = 1000 / 30
 
+/*
+
+ADD BLOOD
+
+
+
+
+
+
+
+
+
+
+
+*/
+
+
 let users = [];
 const game = new Game();
 

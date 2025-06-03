@@ -1,87 +1,27 @@
+import { Body } from "./body.js";
+import { bullets } from "./bullet.js";
 import { scene } from "./game.js";
-import { Hand } from "./hand.js";
 import * as THREE from "./lib/three/build/three.module.js"
-import { FBXLoader } from "./lib/three/examples/jsm/loaders/FBXLoader.js";
-import { GLTFLoader } from "./lib/three/examples/jsm/loaders/GLTFLoader.js";
+import { particles } from "./particles.js";
 
-class Enemy extends THREE.Object3D {
+class Enemy extends Body {
     constructor () {
         super();
-        this.position.set(0, 1, 0);
-
-        this.velocity = new THREE.Vector2(0, 0);
-        this.mixer = new THREE.AnimationMixer();
-
-        this.animations = {};
-        this.currentAnimation = "";
 
         this.rotateX(- Math.PI / 2)
 
         this.loadSkin();
     }
 
-    loadSkin() {
-        const loader = new GLTFLoader();
+    shoot(dir, time, id) {
+        bullets.set(this, dir, time, id);
 
-        loader.load("./lib/models/swat.glb", (gltf) => {
-            const model = gltf.scene;
-
-            model.traverse(child => {
-                if (child.isMesh) {
-                    child.material.transparent = false;
-                    child.material.opacity = 1.0;
-                    child.material.depthWrite = true;
-                    child.material.needsUpdate = true;
-
-                    const mat = child.material.clone();
-                    child.material = new THREE.MeshLambertMaterial(mat);
-                }
-            });
-
-            model.position.z = -1;
-
-            this.add(model);
-
-            this.hand = new Hand(new THREE.SkeletonHelper(model));
-
-            this.loadAnimations(model)
-        })
-    }
-
-    loadAnimations(model) {
-        this.mixer = new THREE.AnimationMixer(model);
-
-        const loader = new FBXLoader();
-
-        [
-            "idle_rifle",
-            "walk_rifle",
-            "run_rifle",
-            "idle_rifle_ads",
-            "walk_rifle_ads",
-            "run_rifle_ads"
-        ]
-        .forEach(key => {
-            loader.load(`./lib/animations/${key}.fbx`, animation => {
-                this.animations[key] = this.mixer.clipAction(animation.animations[0]);
-            })
-        })
-    }
-
-    playAnimation(key) {
-        if (key === this.currentAnimation) return;
-
-        Object.entries(this.animations).forEach(([key, value]) => {
-            this.animations[key].fadeOut(0.15);
-        })
- 
-        if (!this.animations[key]) return;
-        this.animations[key].reset().fadeIn(0.15).play();
-        this.currentAnimation = key;
+        particles.muzzleSmoke(this);
     }
 
     update(dt) {
         this.mixer.update(dt);
+        if (this.hand && this.hand.gun) this.hand.gun.update(dt);
     }
 }
 
@@ -106,8 +46,16 @@ export class Enemies extends Map {
         }
     }
 
+    shot(dir, time, id) {
+        if (!this.has(id)) return;
+        const enemy = this.get(id);
+
+        enemy.shoot(dir, time, id);
+    }
+
     onServerUpdate(data, id) {
         const [position, velocity, state, rotation] = data;
+        const [movement, aiming] = state;
 
         if (this.has(id)) {
             const enemy = this.get(id);
@@ -115,8 +63,13 @@ export class Enemies extends Map {
             enemy.position.set(...position);
             enemy.velocity.set(...velocity);
             enemy.rotation.z = rotation;
+            if (aiming) {
+                enemy.aim();
+            } else if (enemy.hand) {
+                enemy.hand.gun.setDefaultTransform();
+            }
             
-            const animation = state[0] + "_rifle" + (state[1] ? "_ads" : "");
+            const animation = movement + "_rifle" + ((aiming) ? "_ads" : "");
             enemy.playAnimation(animation);
         }
     }

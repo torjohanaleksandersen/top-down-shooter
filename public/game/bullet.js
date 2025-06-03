@@ -38,7 +38,7 @@ class Bullets extends THREE.Object3D {
         this.speed = 20;
     }
 
-    set(_origin, velocity, time, playerId = 0) {
+    set(body, velocity, time, playerId = 0) {
         const mesh = new Bullet();
 
         const yaw = Math.atan2(velocity.x, velocity.y);
@@ -53,7 +53,7 @@ class Bullets extends THREE.Object3D {
         mesh.position.x += mesh.userData.velocity.x * dt * this.speed;
         mesh.position.z += mesh.userData.velocity.y * dt * this.speed;
 
-        const origin = player.hand.gun.getEndPointPositionOfGun();
+        const origin = body.hand.gun.getEndPointPositionOfGun();
 
         mesh.position.copy(origin);
         this.add(mesh);
