@@ -1,230 +1,213 @@
 import * as THREE from "./lib/three/build/three.module.js"
-import { Body } from "./body.js";
-import socket, { PACKET_FREQ } from "../index.js"
-import { camera, scene } from "./game.js";
-import { world } from "./world.js";
-import { bullets } from "./bullet.js";
-import { enemies } from "./enemies.js";
+import { camera, scene } from "./main.js";
+import { KinematicBody } from "./physics/kinematicBody.js";
 import { GLTFLoader } from "./lib/three/examples/jsm/loaders/GLTFLoader.js"
-import { FBXLoader } from "./lib/three/examples/jsm/loaders/FBXLoader.js"
-import { Hand } from "./hand.js";
-import { particles } from "./particles.js";
+import { Animator } from "./animator.js";
+import { Gun } from "./gun.js";
 
-const reqVelocity = new THREE.Vector2(0, 0);
-export const forwardVec = new THREE.Vector2(1, 0);
-const sideVec = new THREE.Vector2(0, 1);
-const mouse = new THREE.Vector2(0, 0);
+const keys = {};
+const mouse = {};
 
-const camSpeed = 0.1;
-let mouseDistance = 0;
+document.addEventListener("keydown", (e) => {
+    const key = e.key.toLowerCase();
+    keys[key] = true;
+})
+document.addEventListener("keyup", (e) => {
+    const key = e.key.toLowerCase();
+    keys[key] = false;
+})
 
-export class Player extends Body {
-    constructor () {
-        super()
-        this.position.set(0, 1, 0);
-        this.velocity = new THREE.Vector2(0, 0);
+document.addEventListener("mousedown", (e) => {
+    mouse[e.button] = true;
+})
+document.addEventListener("mouseup", (e) => {
+    mouse[e.button] = false;
+})
 
+const loader = new GLTFLoader();
+
+class Player extends KinematicBody {
+    constructor() {
+        super(2, 0.5, 90);
+        this.skin = new THREE.Object3D();
+        this.arms = new THREE.Object3D();
+        this.gun = new Gun();
+        this.animator = new Animator();
+        this.handAnimator = new Animator();
+        this.headBone = null;
+        this.handBone = null;
+
+        this.aiming = false;
+        this.shooting = false;
         this.movement = "idle";
+        this.inHand = "rifle";
 
-        this.keys = {};
+        this.loadModel();
+    }
 
-        document.addEventListener("keydown", (e) => { this.keys[e.key.toLowerCase()] = true; });
-        document.addEventListener("keyup", (e) => { this.keys[e.key.toLowerCase()] = false; });
+    async loadModel() {
+        const gltf = await loader.loadAsync("./lib/models/swat_fps.glb");
+        this.remove(this.skin);
+        this.skin = gltf.scene;
+        this.skin.position.set(0, -this.radius - this.cylinderHeight / 2, 0);
+        this.animator = new Animator(this.skin);
 
-
-        document.addEventListener("mousemove", (e) => {
-            mouse.x = e.clientX;
-            mouse.y = e.clientY;
-        })
-
-        document.addEventListener("mousedown", (e) => {
-            if (e.button === 0) this.shoot();
-
-            if (e.button === 2) this.aim();
-        })
-
-        document.addEventListener("mouseup", (e) => {
-            if (e.button === 2) {
-                this.aiming = false;
-                this.hand.gun.setDefaultTransform();
+        this.skin.traverse(obj => {
+            if (obj.isMesh) obj.frustumCulled = false;
+            if (obj.isBone && obj.name === "mixamorigHeadTop_End") {
+                this.headBone = obj;
             }
-        })
+        });
 
-        setInterval(() => {
-            this.sendTransformUpdate();
-        }, PACKET_FREQ)
+        this.skin.rotation.x = - Math.PI / 2
 
-        this.loadSkin();
+        this.add(this.skin);
+
+        this.loadArms();
     }
 
-    shoot() {
-        if (!this.aiming) return;
-        this.shooting = true;
-        setTimeout(() => {
-            this.shooting = false;
-        }, 300);
-        bullets.set(this, forwardVec.clone(), 0);
+    async loadArms() {
+        const gltf = await loader.loadAsync("./lib/models/swat_arms.glb");
+        this.remove(this.arms);
+        this.arms = gltf.scene;
+        this.arms.position.set(0, -this.radius - this.cylinderHeight / 2, 0);
+        this.handAnimator = new Animator(this.arms);
 
-        const data = {};
-        data.playerId = socket.id;
-        data.direction = [
-            forwardVec.x,
-            forwardVec.y
-        ]
-        data.time = Date.now();
+        this.arms.traverse(obj => {
+            if (obj.isMesh) obj.frustumCulled = false;
+            if (obj.isBone && obj.name === "mixamorigRightHand") {
+                this.handBone = obj;
+            }
+        });
 
-        socket.emit("shoot", data)
+        this.arms.rotation.x = - Math.PI / 2;
 
-        particles.muzzleSmoke(player);
+        this.add(this.arms);
+
+        this.loadGun();
     }
 
-    sendTransformUpdate() {
-        const data = [];
-        data.push(this.position.toArray());
-        data.push(this.velocity.toArray());
-        data.push([this.movement, this.aiming]);
-        data.push(this.rotation.z);
+    async loadGun() {
+        const gltf = await loader.loadAsync("./lib/models/ar15.glb");
+        this.gun.model = gltf.scene;
+        this.gun.model.scale.multiplyScalar(0.07);
 
+        this.gun.setTransform();
 
-        socket.emit("transform-update", data);
+        this.gun.model.traverse(obj => {
+            if (obj.isMesh) obj.frustumCulled = false;
+        });
+
+        this.handBone.add(this.gun.model);
     }
 
-    computeForwardVector() {
-        const screenPos = this.position.clone().project(camera);
-
-        const playerScreen = new THREE.Vector2(
-            (screenPos.x + 1) / 2 * window.innerWidth,
-            (-screenPos.y + 1) / 2 * window.innerHeight
-        );
-
-        const dir = new THREE.Vector2(mouse.x - playerScreen.x, mouse.y - playerScreen.y);
-        mouseDistance = dir.length();
-        dir.normalize();
-
-        forwardVec.copy(dir);
-        sideVec.set(-dir.y, dir.x);
+    getForwardVector() {
+        const vec = new THREE.Vector3();
+        camera.getWorldDirection(vec);
+        return vec.normalize();
     }
 
-    updateMovement(dt) {
-        const moveVec = new THREE.Vector2(0, 0);
-
-        if (this.keys['w']) moveVec.add(forwardVec);
-        if (this.keys['s']) moveVec.sub(forwardVec);
-        if (this.keys['d']) moveVec.add(sideVec);
-        if (this.keys['a']) moveVec.sub(sideVec);
-
-        if (moveVec.lengthSq() > 0) {
-            moveVec.normalize().multiplyScalar(this.speed);
-        }
-
-        reqVelocity.copy(moveVec);
-
-        const dx = reqVelocity.x - this.velocity.x;
-        const dz = reqVelocity.y - this.velocity.y;
-
-        this.velocity.x += dx * this.accelerationMagnitude * dt;
-        this.velocity.y += dz * this.accelerationMagnitude * dt;
-
-        this.position.x += this.velocity.x * dt;
-        this.position.z += this.velocity.y * dt;
-
-        const target = this.position.clone().add(new THREE.Vector3(forwardVec.x, 0, forwardVec.y));
-        this.lookAt(target);
-        this.rotateX(- Math.PI / 2);
-        this.rotateY(0.12);
+    getSideVector() {
+        const vec = this.getForwardVector();
+        return new THREE.Vector3(vec.z, 0, -vec.x).normalize();
     }
 
-    updateCamera() {
-        const target = new THREE.Vector3(0, 0, 0);
-        target.x = this.position.x;
-        target.z = this.position.z;
-
-        if (forwardVec.length() > 0) {
-            const forward = new THREE.Vector3(forwardVec.x, 0, forwardVec.y);
-            forward.multiplyScalar(Math.min(mouseDistance / 300, 3))
-
-            target.add(forward);
-        }
-
-        const lerped = camera.position.clone().lerp(target, camSpeed);
-        camera.position.x = lerped.x;
-        camera.position.z = lerped.z;
-    }
-
-    updateStateAnimation() {
-        let animation = "";
-        if (this.keys["w"]) {
-            animation = "run_rifle";
+    handleInput() {
+        this.gunAction = "";
+        if (keys.w) {
             this.movement = "run";
-        } else if (this.keys["a"] || this.keys["s"] || this.keys["d"]) {
-            animation = "walk_rifle";
+        } else if (keys.s || keys.a || keys.d) {
             this.movement = "walk";
         } else {
-            animation = "idle_rifle";
             this.movement = "idle";
         }
 
-        if (this.shooting || this.aiming) {
-            animation += "_ads";
+        if (mouse[0]) {
+            if (this.shooting) return;
+            this.shooting = true;
+            this.gun.shoot();
+
+            setTimeout(() => {
+                this.shooting = false;
+            }, 100)
         }
 
-        this.playAnimation(animation);
+        if (mouse[2]) {
+            this.aiming = true;
+        } else {
+            this.aiming = false;
+        }
     }
 
-    checkCollision(dt) {
-        enemies.forEach(enemy => {
-            const distance = enemy.position.clone().sub(this.position);
+    animate() {
+        let mainName = "";
+        let handName = "";
 
-            if (distance.length() < 2 * this.radius) {
-                this.resolveCollision(enemy, dt);
-            }
-        })
+        mainName = handName = this.movement + "_" + this.inHand;
 
-        const directions = [
-            [1, 0],
-            [0, 1],
-            [-1, 0],
-            [0, -1],
-            [1, 1],
-            [-1, 1],
-            [-1, -1],
-            [1, -1],
-        ]
+        if (this.aiming) {
+            mainName += "_ads"
+            handName = "idle_rifle_ads";
+        }
 
-        directions.forEach(([dx, dz]) => {
-            const raycaster = new THREE.Raycaster(this.position, new THREE.Vector3(dx, 0, dz).normalize(), 0, this.radius);
+        if (this.movement === "walking" || this.aiming) this.gun.setTransform([Math.PI / 2 - 0.05, - 0.02, - Math.PI / 2 + 0.1], [4, 25, 2]);
+        else this.gun.setTransform();
 
-            const intersects = raycaster.intersectObject(world);
-            if (intersects.length > 0) {
-                const object = intersects[0];
-                const localNormal = object.face.normal.clone();
-                const normalMatrix = new THREE.Matrix3().getNormalMatrix(object.object.matrixWorld);
-                const r = localNormal.applyMatrix3(normalMatrix).normalize();
-
-                this.position.add(r.multiplyScalar(dt));
-            }
-        })
-    }
-
-    resolveCollision(object, dt) {
-        const r = this.position.clone().sub(object.position).normalize();
-
-        this.position.add(r.multiplyScalar(dt));
+        this.animator.play(mainName);
+        this.handAnimator.play(handName);
     }
 
     update(dt) {
-        this.computeForwardVector();
-        this.updateMovement(dt);
-        this.updateCamera();
-        this.updateStateAnimation();
+        const forward = this.getForwardVector();
+        this.applyInput(keys, forward);
+        this.handleInput();
+        super.update(dt);
+        this.animate();
 
-        for (let i = 0; i < 5; i++) {
-            this.checkCollision(dt);
+        if (this.headBone) {
+            const headPos = new THREE.Vector3();
+            this.headBone.getWorldPosition(headPos);
+            const f = forward.clone();
+            f.y = 0;
+            f.normalize().multiplyScalar(0.16);
+            f.y = -0.2;
+            headPos.add(f)
+
+            camera.position.copy(headPos)
+
+            if (this.aiming) {
+                // Position
+                const worldCamPos = new THREE.Vector3();
+                camera.getWorldPosition(worldCamPos);
+                this.arms.position.copy(this.worldToLocal(worldCamPos)); // camera position in local player space
+
+                this.arms.translateY(0.1)
+                this.arms.translateZ(-1.521);
+                this.arms.translateX(0.153);
+
+                // Rotation
+                const worldCamQuat = new THREE.Quaternion();
+                camera.getWorldQuaternion(worldCamQuat);
+                this.arms.quaternion.copy(this.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(worldCamQuat));
+            
+                this.arms.rotateX(Math.PI / 2);
+                this.arms.rotateY(Math.PI);
+            } else {
+                this.arms.position.set(0, -this.radius - this.cylinderHeight / 2, 0);
+                this.arms.rotation.x = - Math.PI / 2;
+            }
         }
 
-        this.mixer.update(dt);
-        if (this.hand && this.hand.gun) this.hand.gun.update(dt)
+
+        const yaw = Math.atan2(forward.x, forward.z);
+        this.rotation.y = yaw;
+
+        this.animator.update(dt);
+        this.handAnimator.update(dt)
+        this.gun.update(dt)
     }
 }
+
+
 
 export const player = new Player();
