@@ -8,7 +8,7 @@ export class KinematicBody extends RigidBody {
         super (height, radius, mass);
 
         this.moveForceMagnitude = 1000;
-        this.jumpForceMagnitude = 4 * this.mass;
+        this.jumpForceMagnitude = 5 * this.mass;
         this.crouchHeight = 1 / 4 * this.cylinderHeight;
 
         this.crouching = false;

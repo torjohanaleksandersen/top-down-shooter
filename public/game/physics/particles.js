@@ -1,21 +1,22 @@
 import * as THREE from "../lib/three/build/three.module.js"
 
 export class ParticleSystem {
-    constructor(count) {
+    constructor(count, size = 0.1, opacity = 1.0) {
         this.count = count;
 
         this.positions = new Float32Array(count * 3);
         this.velocities = new Array(count).fill().map(() => new THREE.Vector3());
         this.accelerations = new Array(count).fill().map(() => new THREE.Vector3());
+        this.colors = new Array(count).fill().map(() => new THREE.Color());
 
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
 
         const material = new THREE.PointsMaterial({
-            size: 0.1,
+            size: size,
             vertexColors: true,
             transparent: true,
-            opacity: 0.8,
+            opacity: opacity,
         });
 
         const colors = new Float32Array(count * 3);
@@ -25,6 +26,7 @@ export class ParticleSystem {
         this.points = new THREE.Points(geometry, material);
 
         this.opacityLerpFactor = 0;
+        this.colorLerpFactor = 0;
 
 
         this.dead = false;
@@ -38,8 +40,17 @@ export class ParticleSystem {
         this.colorAttr.setXYZ(i, color.r, color.g, color.b);
     }
 
+    setEndStateParticle(i, color = new THREE.Color()) {
+        this.colors[i] = color;
+    }
+
     applyForce(i, force) {
         this.accelerations[i].add(force);
+    }
+
+    applyImpulse(i, F = new THREE.Vector3(0, 0, 0), dt = 0) {
+        const v = F.clone().multiplyScalar(dt);
+        this.velocities[i].add(v);
     }
 
     applyGlobalForce(force) {
@@ -56,7 +67,13 @@ export class ParticleSystem {
             this.positions[index + 1] += this.velocities[i].y * dt;
             this.positions[index + 2] += this.velocities[i].z * dt;
             this.accelerations[i].set(0, 0, 0);
+
+            const currentColor = new THREE.Color().fromArray(this.colorAttr.array, i * 3);
+
+            currentColor.lerp(this.colors[i], this.colorLerpFactor);
+            this.colorAttr.setXYZ(i, currentColor.r, currentColor.g, currentColor.b);
         }
+        this.colorAttr.needsUpdate = true;
 
         this.points.geometry.attributes.position.needsUpdate = true;
         this.points.geometry.attributes.color.needsUpdate = true;

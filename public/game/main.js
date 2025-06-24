@@ -1,10 +1,11 @@
 import { StaticBody } from "./physics/staticBody.js";
 import * as THREE from "./lib/three/build/three.module.js"
 import { physics } from "./physics/physics.js";
-import { player } from "./player.js";
+import { player } from "./player/player.js";
 import { PointerLockControls } from "./lib/three/examples/jsm/controls/PointerLockControls.js"
 import { GLTFLoader } from "./lib/three/examples/jsm/loaders/GLTFLoader.js";
 
+import { DecalGeometry } from "./lib/three/examples/jsm/geometries/DecalGeometry.js"
 
 
 
@@ -28,7 +29,7 @@ const light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(5, 10, 7.5);
 scene.add(light);
 
-const ambient = new THREE.AmbientLight(0x404040);
+const ambient = new THREE.AmbientLight(0x404040, 2);
 scene.add(ambient);
 
 const geometry = new THREE.PlaneGeometry(100, 100);
@@ -38,7 +39,7 @@ mesh.rotation.x = Math.PI / 2
 scene.add(mesh)
 physics.addStaticBody(new StaticBody({mesh: mesh, complex: true}));
 
-player.position.set(0, 10, 0)
+player.position.set(0, 30, 0)
 physics.addRigidBody(player);
 
 
@@ -50,14 +51,31 @@ mesh1.position.z = 5;
 scene.add(mesh1)
 
 
+const loader = new GLTFLoader();
+loader.load("lib/models/swat.glb", (gltf) => {
+    const model = gltf.scene;
+
+    model.position.set(0, 0, -10);
+
+    scene.add(model);
+
+})
+
+
+
+
+
+
 let lastTime = performance.now();
 function animate() {
     requestAnimationFrame(animate);
 
 
     const now = performance.now();
-    const dt = (now - lastTime) / 1000;
+    let dt = (now - lastTime) / 1000;
     lastTime = now;
+
+    if (dt > 0.05) return;
 
     player.update(dt);
     physics.update(dt);

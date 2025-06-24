@@ -4,7 +4,7 @@ import {
 	Matrix3,
 	Matrix4,
 	Vector3
-} from 'three';
+} from '../../../build/three.module.js';
 
 /**
  * You can use this geometry to create a decal mesh, that serves different kinds of purposes.

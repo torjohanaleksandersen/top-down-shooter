@@ -11,18 +11,27 @@ export class Animator {
         const loader = new FBXLoader();
 
         [
-            "idle_rifle",
-            "walk_rifle",
-            "run_rifle",
-            "idle_rifle_ads",
-            "walk_rifle_ads",
-            "run_rifle_ads",
-            "reloading",
-            "shooting"
+            "idle",
+            "walk",
+            "run",
+            "idle-ads",
+            "walk-ads",
+            "run-ads",
+            "reload",
+            "shoot",
+            "jumpup",
+            "jumpdown",
+            "throw"
         ]
         .forEach(key => {
             loader.load(`./lib/animations/${key}.fbx`, animation => {
                 this.animations[key] = this.mixer.clipAction(animation.animations[0]);
+                
+
+                if (key.includes("jump")) {
+                    this.animations[key].setLoop(THREE.LoopOnce);
+                    this.animations[key].clampWhenFinished = true;
+                }
             })
         })
 
@@ -34,10 +43,20 @@ export class Animator {
         Object.entries(this.animations).forEach(([name, value]) => {
             this.animations[name].fadeOut(Animator.ANIMATION_TIME);
         })
+
+        setTimeout(() => {
+
+        }, 1000)
  
         if (!this.animations[name]) return;
         this.animations[name].reset().fadeIn(Animator.ANIMATION_TIME).play();
         this.currentAnimation = name;
+    }
+
+    restart() {
+        if (!this.animations[this.currentAnimation]) return;
+        this.animations[this.currentAnimation].reset();
+        this.animations[this.currentAnimation].play();
     }
 
     update(dt) {
