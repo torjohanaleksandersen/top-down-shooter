@@ -1,6 +1,27 @@
 import * as THREE from "../lib/three/build/three.module.js"
 import { scene } from "../main.js";
 
+// Given a raycaster instance
+function drawRaycaster(raycaster, length = 1000, color = 0xff0000) {
+    const origin = raycaster.ray.origin;
+    const direction = raycaster.ray.direction.clone().normalize();
+
+    // Calculate the end point
+    const endPoint = origin.clone().add(direction.multiplyScalar(length));
+
+    // Create geometry with origin and endPoint
+    const geometry = new THREE.BufferGeometry().setFromPoints([origin, endPoint]);
+
+    // Create a line material
+    const material = new THREE.LineBasicMaterial({ color });
+
+    // Create the line object
+    const line = new THREE.Line(geometry, material);
+
+    return line;
+}
+
+
 class Physics {
     static GRAVITY = 9.81;
     static SIMULATION_STEPS = 5;
@@ -11,6 +32,7 @@ class Physics {
         this.staticBodies = [];
         this.particleSystems = [];
 
+        this.dt = 0;
     }
 
     addRigidBody(rigidBody) {
@@ -26,6 +48,16 @@ class Physics {
     addParticleSystem(particleSystem) {
         this.particleSystems.push(particleSystem)
         scene.add(particleSystem.points);
+    }
+
+    removeRigidBody(rigidBody) {
+        this.rigidBodies = this.rigidBodies.filter(element => {return element !== rigidBody});
+        scene.remove(rigidBody);
+    }
+
+    removeParticleSystem(particleSystem) {
+        this.particleSystems = this.particleSystems.filter(element => {return element !== particleSystem});
+        scene.remove(particleSystem.points);
     }
 
     pointInRigidBody(rigidBody, point) {
@@ -195,6 +227,40 @@ class Physics {
 
     }
 
+    simulateBulletTrajectory(p, d, onhit) {
+        const timeStep = this.dt;
+        let previousPosition = p.clone();
+
+        for (let t = 0; t <= 2; t += timeStep) {
+            const currentPosition = this.getBulletPosition(t, p, d);
+
+            const direction = new THREE.Vector3().subVectors(currentPosition, previousPosition);
+            const length = direction.length();
+            direction.normalize();
+
+            const raycaster = new THREE.Raycaster(previousPosition, direction, 0, length);
+
+            const mesh = drawRaycaster(raycaster, length, 0x000000);
+            scene.add(mesh);
+
+            const result = this.rayIntersectsStaticBodies(raycaster);
+
+            if (result.hit) {
+                if (onhit) onhit(result.result);
+                break;
+            }
+
+            previousPosition.copy(currentPosition);
+        }
+    }
+
+    getBulletPosition(t = 0, origin = new THREE.Vector3(0, 0, 0), velocity = new THREE.Vector3(0, 0, 0)) {
+        const position = new THREE.Vector3();
+        const gravityTerm = new THREE.Vector3(0, Physics.GRAVITY, 0).clone().multiplyScalar(-0.5 * t * t);
+        const velocityTerm = velocity.clone().multiplyScalar(t);
+        return position.copy(origin).add(velocityTerm).add(gravityTerm);
+    }
+
     resolveCollision(capsulePoint, trianglePoint, rigidBody) {
         if (!capsulePoint || !trianglePoint) return;
 
@@ -225,12 +291,13 @@ class Physics {
         const result = raycaster.intersectObjects(this.staticBodies);
 
         if (result.length > 0) {
-            return { hit: true, result: result};
+            return { hit: true, result: result[0]};
         }
         return { hit: false };
     }
 
     update(dt) {
+        this.dt = dt;
         for (let i = 0; i < Physics.SIMULATION_STEPS; i ++) {
             for (const rigidBody of this.rigidBodies) {
                 rigidBody.onGround = false;
@@ -245,7 +312,7 @@ class Physics {
             particleSystem.update(dt)
 
             if (particleSystem.dead) {
-                scene.remove(particleSystem);
+                this.removeParticleSystem(particleSystem);
             }
         });
 

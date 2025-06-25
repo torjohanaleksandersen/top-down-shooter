@@ -23,6 +23,7 @@ export class Gun {
     static LERP_FACTOR = 1;
 
     static rate = 100;
+    static reloadTime = 2400;
 
     constructor () {
         this.model = new THREE.Object3D();
@@ -30,6 +31,9 @@ export class Gun {
 
         this.recoilPos = new THREE.Vector3(0, 0, 0);
         this.recoilRot = new THREE.Vector3(0, 0, 0);
+
+        this.casings = [];
+        this.particleSystems = [];
 
         this.newTransform = {
             rotation: [Math.PI / 2 - 0.45, 0, - Math.PI / 2],
@@ -62,6 +66,10 @@ export class Gun {
         return d.negate().normalize();
     }
 
+    getBulletStartSpeed() {
+        return 790 + Math.random() * 120;
+    }
+
     setTransform(rotation = defaultTransform.rotation, position = defaultTransform.position) {
         this.newTransform.rotation = rotation;
         this.newTransform.position = position;
@@ -74,7 +82,15 @@ export class Gun {
 
         this.setMuzzleParticles(p, d);
         this.setCasingDrop(p, d);
-        this.setRaycaster(p, d);
+
+        const theta = Math.asin(0.0016);
+        
+        const q = new THREE.Quaternion();
+        q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), theta);
+
+        const rotatedV = d.clone().applyQuaternion(q);
+
+        this.setBullet(p, rotatedV.normalize());
     }
 
     recoil(camera) {
@@ -100,7 +116,9 @@ export class Gun {
 
             i++;
 
-            camera.rotateX(camProg * 0.02);
+            if (camera.rotation.x < 1) {
+                camera.rotateX(camProg * 0.02);   
+            }
 
             this.recoilRot.x = rotDist * 0.02;
             this.recoilRot.y = rotDist * 0.02;
@@ -113,6 +131,12 @@ export class Gun {
         const particleSystem = new ParticleSystem(count, 0.1);
         particleSystem.opacityLerpFactor = 0.05;
         particleSystem.colorLerpFactor = 0.10;
+
+        if (this.particleSystems.length > 5) {
+            physics.removeParticleSystem(this.particleSystems[0]);
+            this.particleSystems.shift();
+        }
+        this.particleSystems.push(particleSystem);
 
         const right = new THREE.Vector3(d.z, 0, -d.x);
         const up = new THREE.Vector3(0, 0, 1).applyQuaternion(this.model.quaternion);
@@ -161,67 +185,35 @@ export class Gun {
     setCasingDrop(p, d) {
         const casing = casingModel.clone(true);
 
-        casing.position.copy(p);
-        casing.lookAt(p.clone().add(d));
+        const position = p.clone().add(d.clone().multiplyScalar(-0.4));
 
-        const rb = new RigidBody(0, 0.1, 1);
+        const rb = new RigidBody(0, 0.05, 1);
         rb.add(casing);
         physics.addRigidBody(rb);
 
-        const side = new THREE.Vector3(d.z, -1.2, -d.x).multiplyScalar(-5);
+        rb.position.copy(position);
+        rb.lookAt(position.clone().add(d));
+
+        const side = new THREE.Vector3(d.z, -0.2, -d.x).add(new THREE.Vector3(-0.5 + Math.random(), -0.5 + Math.random(), -0.5 + Math.random()).multiplyScalar(0.2)).multiplyScalar(-5);
         rb.applyImpulse(side, 1);
 
+        rb.userData.dr = new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(0.01);
+        rb.userData.TTL = 20;
+
+        this.casings.push(rb);
     }
 
-    setRaycaster(p, d) {
-        const geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-        const material = new THREE.MeshStandardMaterial({color: 0x00ff00});
-        const mesh = new THREE.Mesh(geometry, material);
-        
-        const raycaster = new THREE.Raycaster(p, d.clone().normalize(), 3, 50);
-        const intersects = raycaster.intersectObjects(scene.children);
+    setBullet(p, d) {
+        const velocity = d.clone().multiplyScalar(this.getBulletStartSpeed());
 
-        const intersection = {
-            intersects: false,
-            point: new THREE.Vector3(),
-            normal: new THREE.Vector3()
-        };
-
-        if (intersects.length > 0) {
-            const result = intersects[0];
-            const mesh = result.object;
-
-            /*
-            console.log(result)
-
-            const p = result.point;
-            intersection.point.copy( p );
-
-            const normalMatrix = new THREE.Matrix3().getNormalMatrix( mesh.matrixWorld );
-
-            const n = result.face.normal.clone();
-            n.applyNormalMatrix( normalMatrix );
-            n.multiplyScalar( 10 );
-            n.add( result.point );
-
-            intersection.normal.copy( result.face.normal );
-
-            intersection.intersects = true;
-
-            intersects.length = 0;
-
-            const blood = new Blood();
-            decalsManager.add(0, mesh, p, intersection.normal, new THREE.Vector3(1, 1, 1), blood.material);
-            const m = decalsManager.get(0);
-            scene.add(m);
-            */
-        }
-
+        physics.simulateBulletTrajectory(p, velocity, (result) => {
+            const geometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+            const material = new THREE.MeshBasicMaterial({color: 0x0000ff})
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(result.point);
+            scene.add(mesh);
+        })
     }
-
-
-
-
 
     setVisibility(visible = true) {
         this.model.traverse((obj) => {
@@ -239,5 +231,29 @@ export class Gun {
         const targetRot = new THREE.Vector3(...this.newTransform.rotation);
         const newRot = currentRot.lerp(targetRot, Gun.LERP_FACTOR);
         this.model.rotation.set(newRot.x, newRot.y, newRot.z);
+
+        this.casings.forEach(casing => {
+            casing.userData.TTL -= dt;
+            if (casing.userData.TTL < 0) {
+                physics.removeRigidBody(casing);
+            }
+            if (casing.userData.doneRotating) return;
+            if (casing.onGround) {
+                const r = casing.position.clone().add(new THREE.Vector3(-0.5 + Math.random(), 0, -0.5 + Math.random()).normalize());
+                casing.lookAt(r);
+                casing.userData.doneRotating = true;
+                return;
+            }
+            const dr = casing.userData.dr;
+            casing.rotation.x += dr.x;
+            casing.rotation.y += dr.y;
+            casing.rotation.z += dr.z;
+        })
+
+        this.casings = this.casings.filter(casing => {
+            return !(casing.userData.doneRotating && casing.userData.TTL < 0);
+        });
+
+        this.particleSystems = this.particleSystems.filter(element => {return !element.dead})
     }
 }

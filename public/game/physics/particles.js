@@ -83,7 +83,7 @@ export class ParticleSystem {
         const lerpFactor = this.opacityLerpFactor;
 
         this.points.material.opacity = current + (target - current) * lerpFactor;
-        if (this.points.material.opacity <= 0) this.dead = true;
+        if (this.points.material.opacity <= 0.05) this.dead = true;
 
     }
 }

@@ -44,11 +44,11 @@ physics.addRigidBody(player);
 
 
 const geometry1 = new THREE.BoxGeometry(2, 2, 2);
-const material1 = new THREE.MeshBasicMaterial({color: 0xff0000})
+const material1 = new THREE.MeshBasicMaterial({color: 0x00ff00})
 const mesh1 = new THREE.Mesh(geometry1, material1);
-mesh1.position.y = 5;
+mesh1.position.y = 1;
 mesh1.position.z = 5;
-scene.add(mesh1)
+physics.addStaticBody(new StaticBody({mesh: mesh1}))
 
 
 const loader = new GLTFLoader();

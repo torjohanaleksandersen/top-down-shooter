@@ -1,6 +1,5 @@
 
 
-
 export class PlayerStateManager {
     constructor(player, layerName = "default") {
         this.player = player;
@@ -53,14 +52,12 @@ class IdleState {
     }
 
     enter() {
-        const ads = this.player.weaponState.currentState.name;
-        if (ads === "hipfire") {
-            this.player.animator.play("idle");
-            this.player.handAnimator.play("idle");
-        } else if (ads === "ads") {
-            this.player.animator.play("idle-ads");
-            this.player.handAnimator.play("idle-ads");
-        }
+        const ws = this.player.weaponState.currentState.name;
+
+        if (ws !== "hipfire") return;
+
+        this.player.animator.play("idle");
+        this.player.handAnimator.play("idle");
     }
 
     exit() {
@@ -75,14 +72,12 @@ class WalkState {
     }
 
     enter() {
-        const ads = this.player.weaponState.currentState.name;
-        if (ads === "hipfire") {
-            this.player.animator.play("walk");
-            this.player.handAnimator.play("walk");
-        } else if (ads === "ads") {
-            this.player.animator.play("walk-ads");
-            this.player.handAnimator.play("idle-ads");
-        }
+        const ws = this.player.weaponState.currentState.name;
+
+        if (ws !== "hipfire") return;
+
+        this.player.animator.play("walk");
+        this.player.handAnimator.play("walk");
 
         this.player.gun.setTransform([Math.PI / 2 - 0.05, - 0.02, - Math.PI / 2 + 0.1], [4, 25, 2]);
     }
@@ -99,14 +94,12 @@ class RunState {
     }
 
     enter() {
-        const ads = this.player.weaponState.currentState.name;
-        if (ads === "hipfire") {
-            this.player.animator.play("run");
-            this.player.handAnimator.play("run");
-        } else if (ads === "ads") {
-            this.player.animator.play("walk-ads");
-            this.player.handAnimator.play("idle-ads");
-        }
+        const ws = this.player.weaponState.currentState.name;
+
+        if (ws !== "hipfire") return;
+
+        this.player.animator.play("run");
+        this.player.handAnimator.play("run");
     }
 
     exit() {
@@ -226,4 +219,25 @@ class AimDownSightState {
     }
 }
 
-export { IdleState, WalkState, RunState, JumpState, NoActionState, ThrowState, HipfireState, AimDownSightState }
+class ReloadingState {
+    constructor(player) {
+        this.player = player;
+        this.name = "reload";
+    }
+
+    enter() {
+        const movement = this.player.movementState.currentState.name;
+
+        this.player.animator.play("reload");
+        this.player.handAnimator.play("reload");
+
+        this.player.gun.setTransform([Math.PI / 2 - 0.05, - 0.02, - Math.PI / 2 + 0.1], [4, 25, 2]);
+    }
+
+    exit() {
+        this.player.gun.setTransform()
+    }
+}
+
+
+export { IdleState, WalkState, RunState, JumpState, NoActionState, ThrowState, HipfireState, AimDownSightState, ReloadingState }

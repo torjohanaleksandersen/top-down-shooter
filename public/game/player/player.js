@@ -5,7 +5,7 @@ import { GLTFLoader } from "../lib/three/examples/jsm/loaders/GLTFLoader.js"
 import { Animator } from "../animator.js";
 import { Gun } from "../gun.js";
 import { inputManager } from "./input-manager.js";
-import { PlayerStateManager, IdleState, WalkState, JumpState, NoActionState, ThrowState, HipfireState, AimDownSightState, RunState } from "./player-state-manager.js";
+import { PlayerStateManager, IdleState, WalkState, JumpState, NoActionState, ThrowState, HipfireState, AimDownSightState, RunState, ReloadingState } from "./player-state-manager.js";
 
 const loader = new GLTFLoader();
 
@@ -39,6 +39,7 @@ class Player extends KinematicBody {
 
         this.weaponState.setStates({
             hipfire: new HipfireState(this),
+            reload: new ReloadingState(this),
             ads: new AimDownSightState(this),
         });
 
@@ -166,9 +167,19 @@ class Player extends KinematicBody {
 
         }
 
-        if (inputManager.mouse[2]) {
+        if (inputManager.keys.r && !this.weaponState.is("reload")) {
+            this.weaponState.setState("reload", this.movementState.forceUpdates);
+
+            setTimeout(() => {
+                this.weaponState.setState("hipfire", this.movementState.forceUpdates);
+            }, Gun.reloadTime)
+        } else if (!this.weaponState.is("ads") && !this.weaponState.is("reload")) {
+            this.weaponState.setState("hipfire", this.movementState.forceUpdates)
+        }
+        
+        if (inputManager.mouse[2] && !this.weaponState.is("reload")) {
             this.weaponState.setState("ads", this.movementState.forceUpdates);
-        } else {
+        } else if (!this.weaponState.is("reload")) {
             this.weaponState.setState("hipfire", this.movementState.forceUpdates);
         }
 
@@ -180,7 +191,7 @@ class Player extends KinematicBody {
         this.headBone.getWorldPosition(headPos);
         const f = forward.clone();
         f.y = 0;
-        f.normalize().multiplyScalar(0.16);
+        f.normalize().multiplyScalar(0.18);
         f.y = -0.15;
         headPos.add(f);
 
@@ -223,6 +234,7 @@ class Player extends KinematicBody {
 
         const yaw = Math.atan2(forward.x, forward.z);
         this.rotation.y = yaw;
+
 
         this.animator.update(dt);
         this.handAnimator.update(dt)
