@@ -1,5 +1,5 @@
-import * as THREE from "./lib/three/build/three.module.js"
-import { FBXLoader } from "./lib/three/examples/jsm/loaders/FBXLoader.js"
+import * as THREE from "../lib/three/build/three.module.js"
+import { FBXLoader } from "../lib/three/examples/jsm/loaders/FBXLoader.js"
 
 
 export class Animator {
@@ -21,7 +21,12 @@ export class Animator {
             "shoot",
             "jumpup",
             "jumpdown",
-            "throw"
+            "throw",
+            "dead",
+            "driving",
+
+
+            "civ-idle"
         ]
         .forEach(key => {
             loader.load(`./lib/animations/${key}.fbx`, animation => {
@@ -43,10 +48,6 @@ export class Animator {
         Object.entries(this.animations).forEach(([name, value]) => {
             this.animations[name].fadeOut(Animator.ANIMATION_TIME);
         })
-
-        setTimeout(() => {
-
-        }, 1000)
  
         if (!this.animations[name]) return;
         this.animations[name].reset().fadeIn(Animator.ANIMATION_TIME).play();
@@ -59,7 +60,13 @@ export class Animator {
         this.animations[this.currentAnimation].play();
     }
 
+    stop() {
+        Object.entries(this.animations).forEach(([name, value]) => {
+            this.animations[name].fadeOut(Animator.ANIMATION_TIME);
+        })
+    }
+
     update(dt) {
-        this.mixer.update(dt * 0.5)
+        this.mixer.update(dt)
     }
 }

@@ -1,11 +1,11 @@
-import { Blood, decalsManager } from "./decals.js";
-import * as THREE from "./lib/three/build/three.module.js"
-import { DecalGeometry } from "./lib/three/examples/jsm/geometries/DecalGeometry.js";
-import { GLTFLoader } from "./lib/three/examples/jsm/loaders/GLTFLoader.js";
-import { camera, scene } from "./main.js";
-import { ParticleSystem } from "./physics/particles.js";
-import { physics } from "./physics/physics.js";
-import { RigidBody } from "./physics/rigidBody.js";
+import * as THREE from "../lib/three/build/three.module.js"
+import * as CANNON from "../lib/cannon-es/dist/cannon.js"
+import { GLTFLoader } from "../lib/three/examples/jsm/loaders/GLTFLoader.js";
+import { camera, scene } from "../game.js";
+import { ParticleSystem } from "../physics/particles.js";
+import { physics } from "../physics/main.js";
+import { RigidBody } from "../physics/rigidBody.js";
+import { player } from "../player/player.js";
 
 const defaultTransform = {
     rotation: [Math.PI / 2 - 0.45, 0, - Math.PI / 2],
@@ -24,9 +24,12 @@ export class Gun {
 
     static rate = 100;
     static reloadTime = 2400;
+    static bulletDamping = 0.85; //15% loss every second
 
     constructor () {
         this.model = new THREE.Object3D();
+        this.muzzle = new THREE.Object3D();
+        this.ejectionPort = new THREE.Object3D();
         this.cooling = false;
 
         this.recoilPos = new THREE.Vector3(0, 0, 0);
@@ -39,25 +42,36 @@ export class Gun {
             rotation: [Math.PI / 2 - 0.45, 0, - Math.PI / 2],
             position: [3, 25, -2]
         }
+
+
     }
 
-    getPipeTransform() {
+    onModelLoaded() {
+        this.model.add(this.muzzle);
+        this.muzzle.position.set(0, 70, -600);
+
+        this.model.add(this.ejectionPort);
+        this.ejectionPort.position.set(0, 70, 0);
+    }
+
+    getMuzzlePosition() {
         const p = new THREE.Vector3();
-        this.model.getWorldPosition(p);
+        this.muzzle.getWorldPosition(p);
 
-        const d = new THREE.Vector3();
-        this.model.getWorldDirection(d);
-        d.negate().multiplyScalar(0.5);
-
-        const up = new THREE.Vector3(0, 0, 1).applyQuaternion(this.model.quaternion);
-        up.multiplyScalar(- 0.1);
-
-        p.add(d);
-        p.add(up);
+        const q = new THREE.Quaternion();
+        const s = new THREE.Vector3();
+    
+        this.muzzle.updateMatrixWorld();
+        this.muzzle.matrixWorld.decompose(p, q, s);
 
         return p;
     }
 
+    getEjectionPortPosition() {
+        const p = new THREE.Vector3();
+        this.ejectionPort.getWorldPosition(p);
+        return p;
+    }
 
     getDirection() {
         const d = new THREE.Vector3();
@@ -76,17 +90,20 @@ export class Gun {
     }
 
     shoot() {
-        
-        const p = this.getPipeTransform();
+        const p = this.getMuzzlePosition();
+        const ejectionPortP = this.getEjectionPortPosition();
         const d = this.getDirection();
 
         this.setMuzzleParticles(p, d);
-        this.setCasingDrop(p, d);
+        this.setCasingDrop(ejectionPortP, d);
 
-        const theta = Math.asin(0.0016);
+        const localY = new THREE.Vector3(1, 0, 0);
+        const globalY = localY.clone().applyMatrix4(this.muzzle.matrixWorld).sub(this.muzzle.getWorldPosition(new THREE.Vector3())).normalize();
+
+        const theta = Math.asin(0.002);
         
-        const q = new THREE.Quaternion();
-        q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), theta);
+        const q = new THREE.Quaternion(); 
+        q.setFromAxisAngle(globalY, theta);
 
         const rotatedV = d.clone().applyQuaternion(q);
 
@@ -95,6 +112,10 @@ export class Gun {
 
     recoil(camera) {
         let camProg = 0, camDist = 0.3, i = 0;
+
+        const dir = new THREE.Vector3(0, 0, 0);
+        camera.getWorldDirection(dir);
+        const yaw = dir.y;
 
         let rotProg = 0, rotDist = 0;
 
@@ -116,13 +137,13 @@ export class Gun {
 
             i++;
 
-            if (camera.rotation.x < 1) {
+            if (yaw < 0.7) {
                 camera.rotateX(camProg * 0.02);   
             }
 
-            this.recoilRot.x = rotDist * 0.02;
-            this.recoilRot.y = rotDist * 0.02;
-            this.recoilPos.x = rotDist * 0.02;
+            this.recoilRot.z = rotDist * 0.005;
+            this.recoilRot.x = rotDist * 0.005;
+            this.recoilPos.y = rotDist * 0.02;
         }, 10)
     }
 
@@ -185,31 +206,52 @@ export class Gun {
     setCasingDrop(p, d) {
         const casing = casingModel.clone(true);
 
-        const position = p.clone().add(d.clone().multiplyScalar(-0.4));
+        const rotationObject3d = new THREE.Object3D();
+        rotationObject3d.position.copy(p);
+        rotationObject3d.lookAt(p.clone().add(d));
+        const q = rotationObject3d.quaternion.clone();
 
-        const rb = new RigidBody(0, 0.05, 1);
-        rb.add(casing);
-        physics.addRigidBody(rb);
+        const shape = new CANNON.Box(new CANNON.Vec3(0.01, 0.01, 0.03));
+        const body = new CANNON.Body({
+            mass: 0.01,
+            shape: shape,
+            position: new CANNON.Vec3(p.x, p.y, p.z),
+            quaternion: new CANNON.Quaternion(q.x, q.y, q.z, q.w),
+            angularDamping: 0.05
+        });
 
-        rb.position.copy(position);
-        rb.lookAt(position.clone().add(d));
+        const pvel = player.rigidBody.physicsBody.velocity;
 
-        const side = new THREE.Vector3(d.z, -0.2, -d.x).add(new THREE.Vector3(-0.5 + Math.random(), -0.5 + Math.random(), -0.5 + Math.random()).multiplyScalar(0.2)).multiplyScalar(-5);
-        rb.applyImpulse(side, 1);
+        const vel = new THREE.Vector3(-d.z, 0.2, d.x).sub(d.clone().multiplyScalar(0.5)).normalize().multiplyScalar(3);
+        vel.add(new THREE.Vector3(pvel.x, pvel.y, pvel.z));
+        body.velocity.copy(new CANNON.Vec3(vel.x, vel.y, vel.z));
 
-        rb.userData.dr = new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(0.01);
-        rb.userData.TTL = 20;
+        const angvel = new THREE.Vector3(-0.5 + Math.random(), -0.5 + Math.random(), -0.5 + Math.random()).multiplyScalar(10);
+        body.angularVelocity = new CANNON.Vec3(angvel.x, angvel.y, angvel.z);
 
-        this.casings.push(rb);
+        const wrapper = new THREE.Object3D();
+        casing.position.set(0, 0, -0.03);
+        wrapper.add(casing);
+        
+        const rigidBody = new RigidBody(wrapper, body);
+        rigidBody.timeToLive = 10;
+        physics.addRigidBody(rigidBody);
     }
 
     setBullet(p, d) {
         const velocity = d.clone().multiplyScalar(this.getBulletStartSpeed());
 
-        physics.simulateBulletTrajectory(p, velocity, (result) => {
+        physics.simulateBulletTrajectory(p, velocity, Gun.bulletDamping, (result) => {
+            if (result.object.userData.type === "civilian") {
+                result.object.userData.this.onHit();
+                return;
+            }
+
+
             const geometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
             const material = new THREE.MeshBasicMaterial({color: 0x0000ff})
             const mesh = new THREE.Mesh(geometry, material);
+
             mesh.position.copy(result.point);
             scene.add(mesh);
         })
@@ -231,28 +273,6 @@ export class Gun {
         const targetRot = new THREE.Vector3(...this.newTransform.rotation);
         const newRot = currentRot.lerp(targetRot, Gun.LERP_FACTOR);
         this.model.rotation.set(newRot.x, newRot.y, newRot.z);
-
-        this.casings.forEach(casing => {
-            casing.userData.TTL -= dt;
-            if (casing.userData.TTL < 0) {
-                physics.removeRigidBody(casing);
-            }
-            if (casing.userData.doneRotating) return;
-            if (casing.onGround) {
-                const r = casing.position.clone().add(new THREE.Vector3(-0.5 + Math.random(), 0, -0.5 + Math.random()).normalize());
-                casing.lookAt(r);
-                casing.userData.doneRotating = true;
-                return;
-            }
-            const dr = casing.userData.dr;
-            casing.rotation.x += dr.x;
-            casing.rotation.y += dr.y;
-            casing.rotation.z += dr.z;
-        })
-
-        this.casings = this.casings.filter(casing => {
-            return !(casing.userData.doneRotating && casing.userData.TTL < 0);
-        });
 
         this.particleSystems = this.particleSystems.filter(element => {return !element.dead})
     }

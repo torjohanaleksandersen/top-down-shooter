@@ -1,53 +1,34 @@
 import * as THREE from "../lib/three/build/three.module.js"
+import * as CANNON from "../lib/cannon-es/dist/cannon.js"
 
-export class RigidBody extends THREE.Object3D {
-    constructor (height, radius, mass = 1) {
-        super();
-        this.height = height;
-        this.radius = radius;
-        this.mass = mass;
+export class RigidBody {
+    constructor (object3d = new THREE.Object3D(), physicsBody = new CANNON.Body({mass: 1})) {
+        this.object3d = object3d;
+        this.physicsBody = physicsBody;
 
-        this.position.set(0, 0, 0);
-        this.velocity = new THREE.Vector3(0, 0, 0);
-        this.acceleration = new THREE.Vector3(0, 0, 0);
-        this.appliedForce = new THREE.Vector3(0, 0, 0);
-
-        this.onGround = false;
-        this.damping = 0.02;
-
-        this.cylinderHeight = this.height - 2 * this.radius;
-        this.start = this.position.clone().sub(new THREE.Vector3(0, this.cylinderHeight / 2, 0));
-        this.end = this.position.clone().add(new THREE.Vector3(0, this.cylinderHeight / 2, 0));
+        this.timeToLive = Infinity;
+        this.alive = true;
     }
 
-    applyForce(F = new THREE.Vector3(0, 0, 0)) {
-        this.appliedForce.add(F);
+    setPosition(x, y, z) {
+        this.object3d.position.set(x, y, z);
+        this.physicsBody.position.copy(new CANNON.Vec3(x, y, z));
     }
 
-    applyImpulse(F = new THREE.Vector3(0, 0, 0), dt = 0) {
-        const v = F.clone().multiplyScalar(dt).divideScalar(this.mass);
-        this.velocity.add(v);
+    setQuaternion(x, y, z, w) {
+        this.object3d.quaternion.set(x, y, z, w);
+        this.physicsBody.quaternion.copy(new CANNON.Quaternion(x, y, z, w));
     }
 
-    applyTransform(options) {
-        for (const transform in options) {
-            const value = options[transform];
-            this[transform] = value;
-        }
+    setRotation(x, y, z) {
+        this.object3d.setRotationFromEuler(new THREE.Euler(x, y, z));
+        this.physicsBody.quaternion.setFromEuler(x, y, z);
     }
 
     update(dt) {
-        this.applyForce(new THREE.Vector3(0, -9.81 * this.mass, 0));
+        this.object3d.position.copy(this.physicsBody.position);
+        this.object3d.quaternion.copy(this.physicsBody.quaternion);
 
-        this.acceleration.copy(this.appliedForce.divideScalar(this.mass));
-        this.velocity.add(this.acceleration.clone().multiplyScalar(dt));
-        if (this.onGround) this.velocity.multiply(new THREE.Vector3(1 - this.damping, 1, 1 - this.damping));
-
-        this.position.add(this.velocity.clone().multiplyScalar(dt));
-
-        this.start.copy(this.position.clone().sub(new THREE.Vector3(0, this.cylinderHeight / 2, 0)));
-        this.end.copy(this.position.clone().add(new THREE.Vector3(0, this.cylinderHeight / 2, 0)));
-
-        this.appliedForce.set(0, 0, 0);
+        this.timeToLive -= dt;
     }
 }
